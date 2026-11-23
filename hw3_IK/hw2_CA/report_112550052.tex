@@ -1,0 +1,144 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{setspace}
+
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+\onehalfspacing
+
+\title{Computer Animation HW2 Report\\Skeleton Animation and Interpolation}
+\author{Student ID: 112550052}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introduction and Motivation}
+In this homework, I implemented a full skeleton animation pipeline based on quaternion rotations.
+The main goal was to replace Euler-angle based joint rotation handling with quaternion-based processing, then build interpolation on top of it.
+Compared with Euler angles, quaternions are more stable for continuous animation and avoid gimbal lock.
+
+I focused on five required parts and one bonus extension:
+\begin{itemize}
+    \item converting AMC Euler rotations to unit quaternions,
+    \item forward kinematics in a hierarchy tree,
+    \item keyframe hemisphere normalization,
+    \item root position interpolation in world space,
+    \item quaternion interpolation with Slerp and Squad,
+    \item bonus: root interpolation method toggle (Linear vs Catmull-Bezier).
+\end{itemize}
+
+\section{Fundamental Implementation}
+
+\subsection{Part 1: Euler to Quaternion}
+In \texttt{motion.cpp}, each bone rotation read from AMC is converted from Euler degrees to quaternion.
+I used the same axis convention as the provided helper utilities, then normalized the quaternion before storing.
+This step is important because all downstream interpolation and FK assume valid unit quaternions.
+
+\subsection{Part 2: Forward Kinematics}
+In \texttt{kinematics.cpp}, I implemented recursive traversal over the skeleton hierarchy:
+\begin{itemize}
+    \item root bone starts from frame root translation,
+    \item each child starts at its parent end position,
+    \item global rotation is accumulated from parent global rotation and local joint rotation,
+    \item end position is computed from rotated local direction times bone length.
+\end{itemize}
+This gives consistent global start/end positions and global orientation for every bone in each frame.
+
+\subsection{Part 3: Hemisphere Normalization}
+In \texttt{main.cpp} keyframe preprocessing, I added a global pass over keyframes.
+For each bone, if the dot product between two consecutive keyframe quaternions is negative, I flip the current quaternion sign.
+Then I normalize again.
+
+This keeps neighboring keyframes on the same hemisphere and avoids taking the long arc during interpolation.
+Without this step, sudden 180-degree-like flips are likely to appear.
+
+\subsection{Part 4: RootPositionInterpolation}
+I implemented root translation interpolation in \texttt{interpolation\_math.cpp} using cubic Bezier with Catmull-Rom style tangents.
+Given \((k_{m1}, k_0, k_1, k_2)\), I compute
+\[
+m_0 = \frac{1}{2}(k_1-k_{m1}), \quad
+m_1 = \frac{1}{2}(k_2-k_0)
+\]
+and convert to Bezier control points:
+\[
+c_0 = k_0,\quad
+c_1 = k_0 + \frac{m_0}{3},\quad
+c_2 = k_1 - \frac{m_1}{3},\quad
+c_3 = k_1.
+\]
+Then the interpolated root position is \(B(t)\), the cubic Bezier curve at parameter \(t\in[0,1]\).
+
+This produces smoother root movement than simple linear interpolation, especially around keyframe boundaries.
+
+\subsection{Part 5: Quaternion Interpolation}
+\textbf{Slerp:}
+I implemented robust Slerp with:
+\begin{itemize}
+    \item input normalization,
+    \item hemisphere fix using dot-product sign,
+    \item near-parallel fallback to normalized linear blend (to avoid numerical instability),
+    \item standard trigonometric Slerp formula otherwise.
+\end{itemize}
+
+\textbf{Squad (basic version):}
+I implemented Squad by combining nested Slerps:
+\begin{itemize}
+    \item one arc between the segment endpoints,
+    \item one control arc computed from neighboring keyframes,
+    \item final blend using factor \(2t(1-t)\).
+\end{itemize}
+This gives smoother rotational transition than plain Slerp in many joints.
+
+\section{Questions and Discussion}
+
+\subsection{Q1: Introduce your implementation in RootPositionInterpolation()}
+I used cubic Bezier interpolation with Catmull-Rom-derived tangents.
+The idea is to keep the segment endpoints fixed at \(k_0\) and \(k_1\), while estimating incoming/outgoing motion direction from neighboring keyframes \(k_{m1}\) and \(k_2\).
+Compared with linear interpolation, this method gives better continuity of velocity at keyframe boundaries and visually smoother trajectory.
+
+\subsection{Q2: Observation and comparison between Slerp and Squad}
+My observations from interactive playback are:
+\begin{itemize}
+    \item Slerp is stable and simple, and each segment follows the shortest quaternion arc.
+    \item However, at keyframe boundaries, Slerp may still feel slightly ``piecewise'' because each segment is independent.
+    \item Squad produces smoother transitions across boundaries because it uses neighboring keyframes to shape the rotation curve.
+    \item In clips with larger spacing between keyframes, the visual difference becomes clearer (Squad generally looks more natural).
+\end{itemize}
+
+\subsection{Q3: Why do we need hemisphere-normalized keyframe rotations?}
+Quaternions \(q\) and \(-q\) represent the same physical rotation, but interpolation depends on the 4D direction in quaternion space.
+If two adjacent keyframes use opposite signs, interpolation may travel along a long arc, causing abrupt flips.
+Hemisphere normalization enforces sign consistency across the keyframe sequence, so Slerp/Squad follows the expected short path and motion stays continuous.
+
+\subsection{Discussion and Findings}
+To make the comparison more visible, I tested the same animation clips with different keyframe intervals (\(10\), \(20\), and \(35\)).
+When the interval was \(10\), both Slerp and Squad looked acceptable because the keyframes were already dense.
+At interval \(20\), the difference became easier to notice: Slerp still worked, but joint motion around shoulders and hips looked slightly segmented near keyframe transitions.
+At interval \(35\), the contrast was clear. Squad preserved smoother rotational flow, while Slerp looked more ``connect-the-dots'' between segments.
+
+For root motion, cubic Bezier interpolation gave a smoother trajectory than linear interpolation, especially when the character changed moving direction.
+I also found that hemisphere normalization is not just a theoretical detail: without it, large visual flips can happen even when the keyframe poses themselves are valid.
+After normalization, both Slerp and Squad became much more stable and predictable during playback.
+
+\section{Bonus Implementation}
+I implemented a bonus feature in the control panel: a root interpolation toggle that switches between \texttt{Linear} and \texttt{Catmull-Bezier}.
+This was done by adding an extra root interpolation function (\texttt{RootPositionLinear}) and wiring the UI button to re-bake keyframe data using the selected position interpolator.
+
+In terms of behavior, the linear mode is useful as a baseline because its result is easy to predict.
+The Catmull-Bezier mode usually gives smoother turns and less abrupt speed change near keyframe boundaries.
+This side-by-side toggle made it much easier to compare interpolation behavior and confirm the effect of higher-order position interpolation.
+
+\section{Conclusion}
+This homework helped me understand why quaternion-native pipelines are standard in character animation.
+After replacing Euler-based rotation storage and adding hemisphere normalization, interpolation became much more reliable.
+Slerp is a good baseline, while Squad improves smoothness at segment boundaries.
+For root translation, cubic Bezier with Catmull-style tangents provides a clean and practical trade-off between smoothness and implementation complexity.
+
+\end{document}

@@ -1,0 +1,505 @@
+Project Plan: Reproducing GPU Gems Chapter 38 Fluid Simulation on RTX 3060
+with CPU vs GPU Performance Comparison
+
+1. Project Goal
+
+The goal of this project is to reproduce the simulation core of GPU Gems Chapter 38,
+"Fast Fluid Dynamics Simulation on the GPU", and compare a CPU implementation with a GPU
+implementation on an NVIDIA RTX 3060.
+
+The project will initially focus on the simulation part only. The computer graphics rendering
+part, such as drawing dye/smoke interactively on screen, can be added later. For the first stage,
+the output will be numerical arrays and optional saved images for debugging.
+
+The key requirement is that the CPU and GPU simulations must produce numerically consistent
+results. Performance comparison is only meaningful after correctness is verified.
+
+2. Alignment with GPU Gems Chapter 38
+
+The article implements a 2D stable fluid simulation based on Stam's Stable Fluids method.
+It simulates an incompressible fluid on a regular 2D grid. The simulation state is represented by
+fields such as velocity and pressure.
+
+The original article maps the simulation to the GPU as follows:
+
+CPU concept:
+- 2D arrays store fluid fields
+- nested loops update each grid cell
+
+GPU Gems concept:
+- 2D textures store fluid fields
+- fragment programs update each cell/pixel in parallel
+- render-to-texture or copy-to-texture updates the field
+- temporary textures are used because most operations cannot be done in-place
+
+This project will preserve the same simulation algorithm, but the GPU implementation will use
+CUDA instead of old Cg fragment programs. The mapping becomes:
+
+CPU:
+- one loop iteration updates one grid cell
+
+CUDA GPU:
+- one CUDA thread updates one grid cell
+
+The implementation will therefore reproduce the core idea of the article:
+performing the fluid simulation steps in parallel on the GPU.
+
+3. Simulation Model
+
+The simulation follows the simplified incompressible Navier-Stokes / Stable Fluids pipeline
+described in the article.
+
+The main simulation fields are:
+
+- velocity field u = (u, v)
+- pressure field p
+- divergence field div
+- optional dye/density field q
+
+The first implementation should focus on velocity and pressure. Dye/density can be added later
+for visualization, but it is not required for the initial performance comparison.
+
+4. One Simulation Step
+
+The project should follow the same high-level timestep structure as the article:
+
+1. Advect velocity
+2. Diffuse velocity
+3. Add external forces
+4. Compute pressure
+5. Subtract pressure gradient
+
+In pseudocode:
+
+u = advect(u)
+u = diffuse(u)
+u = addForces(u)
+p = computePressure(u)
+u = subtractPressureGradient(u, p)
+
+In practice, temporary storage is required:
+
+u_temp = advect(u)
+swap(u, u_temp)
+
+The same double-buffering idea should be used for CUDA arrays.
+
+5. Required Simulation Operations
+
+5.1 Advection
+
+Advection transports quantities through the velocity field.
+
+For each grid cell:
+
+- trace backward through the velocity field
+- sample the previous velocity or dye value at that backtraced position
+- write the sampled value to the current cell
+
+For a field q:
+
+previous_position = current_position - dt * velocity(current_position)
+q_new(current_position) = sample(q_old, previous_position)
+
+The article uses semi-Lagrangian advection because it is stable and maps well to GPU execution.
+This project should implement the same method.
+
+For correctness between CPU and GPU, both versions should use the same bilinear interpolation
+routine instead of relying on different hardware interpolation behavior.
+
+5.2 Diffusion
+
+Diffusion models viscosity. In the article, diffusion is solved using Jacobi iteration.
+
+For the first implementation, diffusion may be implemented after advection and projection are
+working. If time is limited, the report should clearly state whether viscosity/diffusion is enabled
+or set to zero.
+
+If implemented, use Jacobi iteration with the same formula on CPU and GPU.
+
+5.3 External Force Application
+
+External forces modify the velocity field.
+
+The original article's demo uses mouse input to apply an impulse to the fluid. Since this project
+first focuses on simulation instead of interactive graphics, force input should be deterministic.
+
+Examples:
+
+- a fixed circular impulse at the grid center
+- a fixed horizontal or rotational force field
+- a deterministic Gaussian force splat
+
+This makes CPU-GPU correctness comparison easier.
+
+5.4 Divergence Computation
+
+After advection, diffusion, and force application, the velocity field may have nonzero divergence.
+To enforce incompressibility, compute the divergence of the intermediate velocity field.
+
+For each cell:
+
+div(i, j) = 0.5 / dx * (
+    u(i+1, j).x - u(i-1, j).x
+  + u(i, j+1).y - u(i, j-1).y
+)
+
+The exact formula and boundary handling must be the same in CPU and GPU code.
+
+5.5 Pressure Solve
+
+The article computes pressure by solving a Poisson-pressure equation. It uses Jacobi iteration
+because it is simple and easy to run in parallel on the GPU.
+
+The pressure solve should use:
+
+- pressure initialized to zero before solving
+- divergence as the right-hand-side input
+- a fixed number of Jacobi iterations
+
+Recommended iteration counts for experiments:
+
+- 20 iterations
+- 40 iterations
+- 80 iterations
+
+The article notes that too few Jacobi iterations produce visible error, while more iterations give
+better accuracy at higher computation cost. For this project, iteration count is also a useful
+performance parameter.
+
+5.6 Pressure Gradient Subtraction / Projection
+
+After pressure is computed, subtract its gradient from the intermediate velocity field.
+
+For each cell:
+
+u_new(i, j).x = u_old(i, j).x - 0.5 / dx * (p(i+1, j) - p(i-1, j))
+u_new(i, j).y = u_old(i, j).y - 0.5 / dx * (p(i, j+1) - p(i, j-1))
+
+This projection step should make the velocity field approximately divergence-free.
+
+6. Boundary Conditions
+
+The article uses a one-cell boundary around the simulation grid. Boundary cells are handled
+separately from interior cells.
+
+For this project, use simple and consistent boundary conditions:
+
+- velocity boundary: no-flow or sign-flipped normal velocity
+- pressure boundary: Neumann-style boundary, meaning boundary pressure copies adjacent interior pressure
+
+The exact boundary rule must be identical in CPU and GPU implementations.
+
+Recommended approach:
+
+- interior cells: x = 1 to width - 2, y = 1 to height - 2
+- boundary cells: updated by a separate CPU function or CUDA kernel
+
+7. CPU Implementation Plan
+
+The CPU version is the reference implementation.
+
+It should be simple and readable, not heavily optimized at first.
+
+Suggested data layout:
+
+struct FluidGrid {
+    int width;
+    int height;
+
+    float* vel_x;
+    float* vel_y;
+    float* vel_x_next;
+    float* vel_y_next;
+
+    float* pressure;
+    float* pressure_next;
+    float* divergence;
+
+    float* dye;
+    float* dye_next;   // optional
+};
+
+Suggested CPU functions:
+
+- advect_velocity_cpu(...)
+- diffuse_velocity_cpu(...)
+- add_force_cpu(...)
+- compute_divergence_cpu(...)
+- jacobi_pressure_cpu(...)
+- subtract_gradient_cpu(...)
+- apply_boundary_cpu(...)
+- step_cpu(...)
+
+8. GPU Implementation Plan
+
+The GPU version will use CUDA.
+
+Each CUDA thread updates one grid cell.
+
+Suggested CUDA kernels:
+
+- advect_velocity_kernel(...)
+- diffuse_velocity_kernel(...)
+- add_force_kernel(...)
+- compute_divergence_kernel(...)
+- jacobi_pressure_kernel(...)
+- subtract_gradient_kernel(...)
+- apply_boundary_kernel(...)
+
+Suggested launch configuration:
+
+block = dim3(16, 16)
+grid = dim3((width + 15) / 16, (height + 15) / 16)
+
+Important rules:
+
+- Keep simulation arrays on the GPU during the simulation.
+- Use double buffering for velocity, pressure, and dye.
+- Do not copy data back to CPU every step unless debugging.
+- Copy GPU result back only for correctness verification or final output.
+
+9. Correctness Verification
+
+Correctness must be verified before performance comparison.
+
+Use identical:
+
+- grid size
+- initial velocity
+- initial pressure
+- force input
+- boundary conditions
+- time step dt
+- cell size dx
+- Jacobi iteration count
+- number of simulation steps
+- floating-point precision
+
+Recommended verification process:
+
+1. Initialize the simulation state on CPU.
+2. Copy the exact same initial state to GPU.
+3. Run N steps on CPU.
+4. Run N steps on GPU.
+5. Copy GPU fields back to CPU.
+6. Compare CPU and GPU fields.
+
+Compare:
+
+- velocity x
+- velocity y
+- pressure
+- divergence
+- optional dye/density
+
+Error metrics:
+
+max_abs_error = max(abs(cpu[i] - gpu[i]))
+mean_abs_error = mean(abs(cpu[i] - gpu[i]))
+relative_l2_error = norm(cpu - gpu) / norm(cpu)
+
+Suggested tolerance for float32:
+
+- max absolute error less than 1e-3 or 1e-4
+- relative L2 error less than 1e-3
+
+The results do not need to be bit-identical, but they must be numerically close.
+
+10. Avoiding CPU-GPU Mismatch
+
+CPU and GPU results may differ due to floating-point behavior.
+
+To reduce mismatch:
+
+- use float32 on both CPU and GPU
+- use the same formulas
+- use the same bilinear interpolation implementation
+- avoid CUDA --use_fast_math at first
+- avoid different math approximations
+- avoid reductions in the first version
+- use deterministic initialization
+- use the same boundary update order
+- use the same Jacobi iteration count
+
+11. Performance Measurement
+
+Only measure performance after correctness is verified.
+
+Test grid sizes:
+
+- 128 x 128
+- 256 x 256
+- 512 x 512
+- 1024 x 1024
+
+Test Jacobi iteration counts:
+
+- 20
+- 40
+- 80
+
+Measure:
+
+- CPU time per step
+- GPU kernel-only time per step
+- GPU end-to-end time including memory copies
+- speedup = CPU time / GPU time
+
+The report should distinguish between:
+
+GPU kernel-only time:
+- Measures the cost of the simulation running on the GPU.
+
+GPU end-to-end time:
+- Includes CPU-GPU memory transfers.
+
+For a real GPU simulation, the data would normally stay on the GPU. Therefore, kernel-only time is
+important. However, end-to-end time should also be reported for fairness.
+
+12. Timing Method
+
+CPU timing:
+
+Use std::chrono::high_resolution_clock.
+
+GPU timing:
+
+Use CUDA events:
+
+cudaEvent_t start, stop;
+cudaEventRecord(start);
+run_kernels();
+cudaEventRecord(stop);
+cudaEventSynchronize(stop);
+cudaEventElapsedTime(&ms, start, stop);
+
+Use warm-up runs before measurement.
+
+Recommended:
+
+- 5 warm-up runs
+- 50 or 100 measured runs
+- report average time
+- optionally report min and max time
+
+13. Experiment Tables
+
+Correctness table:
+
+Grid Size | Steps | Jacobi Iterations | Max Abs Error | Mean Abs Error | Relative L2 Error
+128x128   | 100   | 40                | X             | Y              | Z
+256x256   | 100   | 40                | X             | Y              | Z
+512x512   | 100   | 40                | X             | Y              | Z
+
+Performance table:
+
+Grid Size | Jacobi Iterations | CPU Time / Step | GPU Kernel Time / Step | GPU End-to-End Time | Speedup
+128x128   | 40                | X ms            | Y ms                   | Z ms                | X/Y
+256x256   | 40                | X ms            | Y ms                   | Z ms                | X/Y
+512x512   | 40                | X ms            | Y ms                   | Z ms                | X/Y
+1024x1024 | 40                | X ms            | Y ms                   | Z ms                | X/Y
+
+14. Development Milestones
+
+Milestone 1: CPU Reference Simulation
+
+Implement the CPU version of:
+
+- advection
+- divergence
+- pressure Jacobi solve
+- pressure gradient subtraction
+- boundary handling
+
+Deliverable:
+CPU simulation produces stable numerical output on small grids.
+
+Milestone 2: CUDA Simulation Kernels
+
+Implement CUDA kernels for the same operations.
+
+Deliverable:
+GPU simulation runs on RTX 3060 and produces numerical output.
+
+Milestone 3: CPU-GPU Correctness Check
+
+Compare CPU and GPU outputs from identical initial states.
+
+Deliverable:
+CPU and GPU results match within the selected tolerance.
+
+Milestone 4: Performance Benchmark
+
+Run experiments for different grid sizes and Jacobi iteration counts.
+
+Deliverable:
+Performance tables and speedup analysis.
+
+Milestone 5: Optional Dye and Visualization
+
+After simulation and benchmarking are complete:
+
+- add dye/density advection
+- save dye or velocity magnitude as images
+- optionally add OpenGL visualization
+
+15. Scope Control
+
+The initial project does not need to implement:
+
+- real-time OpenGL rendering
+- mouse interaction
+- free-surface water simulation
+- 3D fluid simulation
+- advanced solvers such as multigrid or conjugate gradient
+- obstacles or complex boundaries
+
+These can be listed as future work.
+
+16. Expected Final Report Structure
+
+1. Introduction
+   - Explain the goal of reproducing GPU Gems Chapter 38.
+   - Explain why fluid simulation is suitable for GPU acceleration.
+
+2. Background
+   - Explain stable fluids.
+   - Explain advection, pressure projection, and Jacobi pressure solve.
+   - Explain CPU arrays vs GPU textures / CUDA arrays.
+
+3. Method
+   - Describe CPU implementation.
+   - Describe CUDA implementation.
+   - Describe the timestep pipeline.
+
+4. Correctness Verification
+   - Show CPU vs GPU error metrics.
+   - Explain floating-point tolerance.
+
+5. Performance Evaluation
+   - Show benchmark settings.
+   - Show CPU/GPU timing tables.
+   - Analyze speedup.
+
+6. Discussion
+   - Explain why larger grids benefit more from GPU parallelism.
+   - Explain overhead for small grids.
+   - Discuss Jacobi iteration cost.
+
+7. Future Work
+   - Add dye/smoke visualization.
+   - Add OpenGL or CUDA-OpenGL interop.
+   - Add interactive force input.
+   - Add mixed precision.
+   - Try faster pressure solvers.
+
+17. Final Project Statement
+
+This project reproduces the simulation core of GPU Gems Chapter 38 on modern hardware.
+The original article performs a 2D stable fluid simulation on the GPU using textures and fragment
+programs. This project keeps the same simulation pipeline but implements the GPU version using CUDA
+on an RTX 3060. A CPU version is implemented as the reference. Before comparing performance, the CPU
+and GPU results are validated using numerical error metrics. After correctness is confirmed, the
+project benchmarks different grid sizes and pressure-solver iteration counts to evaluate the speedup
+of GPU-based fluid simulation.

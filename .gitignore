@@ -1,0 +1,27 @@
+# Build outputs
+build/
+out/
+[Bb]in/intermediate/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Compiled objects
+*.o
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.pch
+*.exe
+*.dll
+
+# LaTeX intermediates
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Secrets
+.env

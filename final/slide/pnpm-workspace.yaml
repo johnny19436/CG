@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+  msw: true
+minimumReleaseAgeExclude:
+  - '@open-slide/core@1.10.0'

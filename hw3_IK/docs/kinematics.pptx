@@ -1,0 +1,588 @@
+Source PDF: kinematics (2)(1).pdf
+Total pages: 41
+Conversion format: page-by-page text transcription using the PDF text layer, preserving line breaks and spacing as extracted.
+
+===== Page 1 of 41 =====
+        Forward Kinematics in ASF/AMC
+                                                                  begin
+                                                                     id 2
+                                                                     name lfemur
+                                                                     direction 0.342 -0.939 0
+                                                                     length 7.113
+                                                                     axis 0 0 20 XYZ
+                                                                    dof rx ry rz
+                                                                    limits (-160.0 20.0)
+                                                                          (-70.0 70.0)
+                                                                          (-60.0 70.0)
+                                                                   end
+    𝑖
+𝑉
+         ILE5030 Computer Animation and Special Effects 25S   1
+
+===== Page 2 of 41 =====
+Inverse Kinematics
+
+
+
+                                                          End Effector=P
+
+
+
+        Base
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   2
+
+===== Page 3 of 41 =====
+Redundancy in IK
+
+• Our example
+     – 2 equations (constraints)
+     – 3 unknowns
+
+
+
+     – Multiple solutions exist!
+• This is not uncommon!
+     – see how you can move your elbow while keeping
+         your finger touching your nose
+
+
+ ILE5030 Computer Animation and Special Effects 25S   3
+
+===== Page 4 of 41 =====
+Other problems in IK
+
+• Infinite solutions
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   4
+
+===== Page 5 of 41 =====
+Other problems in IK
+
+• No solutions
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   5
+
+===== Page 6 of 41 =====
+Why Is IK hard?
+
+• Redundancy
+• Natural motion
+   – joint limits
+   – minimum jerk
+   – style?
+• Singularities
+   – ill-conditioned matrix
+   – shown later
+
+
+ ILE5030 Computer Animation and Special Effects 25S   6
+
+===== Page 7 of 41 =====
+Solving Inverse Kinematics
+
+• Analytic method
+• Inverse-Jacobian method
+• Optimization-based method
+• Example-based method
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   7
+
+===== Page 8 of 41 =====
+Analytic Method
+
+
+                                                               θ2
+                                                                    L2
+                                               L1                        Goal
+                                                      θ1                 (X,Y)
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S        8
+
+===== Page 9 of 41 =====
+Analytic Method (cont.)
+
+
+
+                                                                           L2
+                                                                 180- θ2
+                                                  L1                            (X,Y)
+                                                       θ1
+                                                            θT                  Y
+
+                                                                 X
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S          9
+
+===== Page 10 of 41 =====
+Cosine Law
+
+
+                                                           C
+                                   A
+
+                               α                      B
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S       10
+
+===== Page 11 of 41 =====
+Analytic Method
+
+
+                                             L2
+                           L1          180- θ2        (X,Y)
+                             θ1
+                                  θT                  Y
+                                       X
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S           11
+
+===== Page 12 of 41 =====
+Inverse-Jacobian method
+
+• When linkage is complicated
+
+• Iteratively change the joint angles to
+   approach the goal position and orientation
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   12
+
+===== Page 13 of 41 =====
+Jacobian
+
+
+
+• Jacobian is the n by m matrix relating differential
+   changes of θ to differential changes of p (dp)
+
+
+
+• Jacobian maps velocities in joint space to
+   velocities in cartesian space
+
+
+ ILE5030 Computer Animation and Special Effects 25S   13
+
+===== Page 14 of 41 =====
+  Kinematic Interpretation of Jacobian
+
+
+
+
+ILE5030 Computer Animation and Special Effects 25S   14
+
+===== Page 15 of 41 =====
+Example: Jacobian for a 2D arm
+
+• Let’s say we have a simple 2D robot arm with
+  two 1-DOF rotational joints:
+                                                      • p=[px py]
+                                                      θ2
+
+
+
+                                           θ1
+
+ ILE5030 Computer Animation and Special Effects 25S    15
+
+===== Page 16 of 41 =====
+Jacobian for a 2D arm
+
+• The Jacobian matrix J(θ) shows how each
+  component of p varies with respect to each
+  joint angle
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   16
+
+===== Page 17 of 41 =====
+Jacobian for a 2D arm
+• Consider what would happen if we increased θ1 by
+   a small amount. What would happen to p ?
+
+
+                                                      •
+
+
+
+
+                                           θ1
+
+ ILE5030 Computer Animation and Special Effects 25S       17
+
+===== Page 18 of 41 =====
+Jacobian for a 2D arm
+
+• What if we increased θ2 by a small amount?
+
+
+
+                                                      •
+                                                      θ2
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S       18
+
+===== Page 19 of 41 =====
+Jacobian for a 2D arm
+
+
+
+
+                                                      •
+                                                      θ2
+
+
+
+                                           θ1
+
+ ILE5030 Computer Animation and Special Effects 25S       19
+
+===== Page 20 of 41 =====
+Computing Jacobian analytically
+
+• A simple example:
+
+
+
+
+            You can imagine how computing Jacobian
+            gets ugly when there are multiple joints!
+ ILE5030 Computer Animation and Special Effects 25S   20
+
+===== Page 21 of 41 =====
+Computing Jacobian geometrically
+
+• Instead of computing Jacobian analytically,
+   we can take a geometric approach to
+   compute it
+
+• Let’s say we are just concerned with the end
+   effector position p for now.
+     – This also implies that the Jacobian will be an 3×N
+         matrix where N is the number of DOFs
+     – For each DOF of a joint, we analyze how p would
+         change if the DOF changes
+
+ ILE5030 Computer Animation and Special Effects 25S   21
+
+===== Page 22 of 41 =====
+Rotational DOFs
+• Let’s consider a 1-DOF rotational joint first
+• We want to know how the global position p
+   will change if we rotate around the axis.
+
+
+                                                      •
+
+
+                                                               unit-length rotation
+                                                               axis vector
+
+
+                                      θ1
+ ILE5030 Computer Animation and Special Effects 25S       22
+
+===== Page 23 of 41 =====
+Rotational DOFs
+                                                           •
+
+
+
+
+                                                               •
+ai: unit length rotation axis in world space
+ri: position of joint pivot in world space
+p: end effector position in world space
+
+ ILE5030 Computer Animation and Special Effects 25S   23
+
+===== Page 24 of 41 =====
+3-DOF Rotational Joints
+
+• Once we have each axis in world space, each
+  one will get a column in the Jacobian matrix
+• At this point, it is essentially handled as three
+  1-DOF joints, so we can use the same formula
+  for computing the derivative as we did earlier:
+
+
+
+
+• We repeat this for each of the three axes
+
+ ILE5030 Computer Animation and Special Effects 25S   24
+
+===== Page 25 of 41 =====
+Iterative IK Using Inverse Jacobian
+
+                                                            P P+dP Pgoal
+
+
+
+
+ • Linearize about θk locally
+ • Small increments
+
+  ILE5030 Computer Animation and Special Effects 25S   25
+
+===== Page 26 of 41 =====
+Jacobian may not be invertible!
+• Non-square matrix
+     – pseudo inverse
+• Singularity
+     – causes infinite joint velocities
+     – occurs when any        cannot achieve               that is not
+         perpendicular to the arm
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   26
+
+===== Page 27 of 41 =====
+Remedy to Singularity Problem
+
+• Add redundancy
+   – add more joints to the original joint chain
+   (more DOFs are added)
+   – Jacobian matrix is not square
+
+
+• Use pseudo inverse of Jacobian!
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   27
+
+===== Page 28 of 41 =====
+Pseudo Inverse of the Jacobian
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   28
+
+===== Page 29 of 41 =====
+Adding more control to IK
+• Pseudo inverse computes one of many
+  possible solutions that minimize joint angle
+  velocities
+• IK using pseudo inverse Jacobian may not
+  provide natural poses
+• A control term can be added to the pseudo
+  inverse Jacobian solution
+• The control term should not add anything to the
+  velocities, that is
+                                                           control term
+
+ ILE5030 Computer Animation and Special Effects 25S   29
+
+===== Page 30 of 41 =====
+Control Term Adds Zero Linear Velocities
+
+          A solution of this form
+
+        When put into this formula
+         Like this
+
+    After some manipulation,
+    you can show that …
+
+      …it doesn’t affect the
+      desired configuration
+                                    But it can be used to bias
+                                    The solution vector
+
+ ILE5030 Computer Animation and Special Effects 25S   30
+
+===== Page 31 of 41 =====
+Null space
+
+• The control term C is in the null space of J
+
+
+
+• The null space of J is the set of vectors
+   which have no influence on the constraints
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   31
+
+===== Page 32 of 41 =====
+Utility of Null Space
+
+• The null space can be used to reach
+   secondary goals
+
+
+
+• Or to find natural pose / control stiffness of joints
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   32
+
+===== Page 33 of 41 =====
+Optimization-based Method
+
+• Formulate IK as an nonlinear optimization problem
+   – Example
+
+
+
+     – Objective function
+     – Constraint
+     – Iterative algorithm
+• Nonlinear programming method by Zhao & Badler,
+   TOG 1994
+
+
+ ILE5030 Computer Animation and Special Effects 25S   33
+
+===== Page 34 of 41 =====
+Objective Function
+
+• “distance” from the end effector to the goal
+  position/orientation
+• Function of joint angles : G(θ)
+                                                                     Goal
+
+                                                      distance
+
+
+                                                                 End Effector
+
+
+            Base
+
+ ILE5030 Computer Animation and Special Effects 25S   34
+
+===== Page 35 of 41 =====
+Objective Function
+
+
+      Position Goal                                   Orientation Goal
+
+
+
+
+       Position/Orientation Goal
+
+
+
+         weighted sum
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S    35
+
+===== Page 36 of 41 =====
+Nonlinear Optimization
+• Constrained nonlinear optimization problem
+
+                                                       limb coordination
+
+• Solution                                                 joint limits
+     – standard numerical techniques
+     – MATLAB or other optimization packages
+     – usually a local minimum
+     – depends on initial condition
+
+
+ ILE5030 Computer Animation and Special Effects 25S   36
+
+===== Page 37 of 41 =====
+Example-based Method
+
+• Utilize motion database to assist IK solving
+• IK using interpolation
+     – Rose et al., “Artist-directed IK using radial basis function
+         interpolation,” Eurographics’01
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   37
+
+===== Page 38 of 41 =====
+Example-based Method (cont.)
+• IK using constructed statistical model
+     – Grochow et al., “Style-based inverse kinematics,”
+         SIGGRAPH’04
+     – Provide the most likely pose based on given constraints
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   38
+
+===== Page 39 of 41 =====
+Example-based Method (cont.)
+• Constructed pose space (training, extrapolated)
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   39
+
+===== Page 40 of 41 =====
+Videos
+
+• “Style-based inverse kinematics”
+
+
+
+
+ ILE5030 Computer Animation and Special Effects 25S   40
+
+===== Page 41 of 41 =====
+References
+
+• Zhao and Badler, "Inverse kinematics positioning
+  using nonlinear programming for highly articulated
+  figures," ACM TOG 1994.
+• Rose et al., “Artist-directed IK using radial basis
+  function interpolation,” Eurographics’01
+• Keith Grochow, Steven L. Martin, Aaron
+  Hertzmann and Zoran Popovic , "Style-based
+  inverse kinematics," SIGGRAPH’04.
+• Aristidou et al., “Inverse Kinematics Techniques in
+  Computer Graphics: A Survey,” EG 2018
+
+ ILE5030 Computer Animation and Special Effects 25S   41

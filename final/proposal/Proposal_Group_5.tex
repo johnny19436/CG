@@ -1,0 +1,156 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{setspace}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{amsmath}
+
+\setstretch{1.0}
+\setmainfont{TeX Gyre Termes}
+\setCJKmainfont{Noto Serif CJK TC}
+
+\title{\textbf{Project Proposal: Fast 2D Fluid Dynamics on GPU}\\
+\large Reproducing GPU Gems Chapter 38 with CPU--GPU Verification}
+\author{第5組\\
+112550191 \quad 許書瑋 \qquad 112550052 \quad 林哲安}
+\date{\today}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+This project proposes a real-time 2D incompressible fluid simulation based on \textit{GPU Gems} Chapter 38. We map grid-cell updates to GPU parallelism, keep a CPU reference implementation for validation, and benchmark CPU vs.\ GPU under controlled settings. The solver follows advection, force addition, pressure solve, and projection, with interactive dye visualization.
+\end{abstract}
+
+\section{Motivation and Goal}
+Fluid-like effects (smoke, ink, and gaseous motion) are widely used in games, animation, and visual computing. Their simulation is computationally expensive because each frame requires updating many cells repeatedly, including iterative pressure correction.
+
+The project goal is to:
+\begin{itemize}
+    \item implement a robust 2D incompressible fluid solver;
+    \item accelerate the solver on GPU while preserving numerical correctness;
+    \item benchmark CPU vs.\ GPU runtime under controlled settings;
+    \item deliver an interactive visualization for qualitative inspection.
+\end{itemize}
+
+Unlike ``graphics-only'' demos, we prioritize \textbf{correctness before speedup}. Performance claims are reported only after CPU--GPU agreement is validated by error metrics.
+
+\section{Related Work and Background}
+We follow Stam's stable-fluids formulation used in GPU Gems Chapter 38. The solver represents fluid state on a 2D Cartesian grid:
+\begin{itemize}
+    \item velocity field $\mathbf{u} = (u,v)$;
+    \item pressure field $p$;
+    \item divergence field $\nabla \cdot \mathbf{u}$;
+    \item optional dye (density) field $q$ for visualization.
+\end{itemize}
+
+The per-step numerical procedure is:
+\begin{enumerate}
+    \item \textbf{Advection}: semi-Lagrangian backtracing with bilinear interpolation.
+    \item \textbf{External Force}: deterministic and user-driven impulse injection.
+    \item \textbf{Divergence}: compute non-incompressible components.
+    \item \textbf{Pressure Solve}: Jacobi iterations for Poisson equation.
+    \item \textbf{Projection}: subtract pressure gradient from velocity.
+\end{enumerate}
+
+The projection step enforces near-zero divergence and produces incompressible motion behavior.
+
+\section{Proposed Approach and Tools}
+\subsection{System Design}
+We will maintain two implementations of the same algorithm:
+\begin{itemize}
+    \item \textbf{CPU reference}: straightforward loops on arrays, used as baseline.
+    \item \textbf{GPU version}: CUDA kernels where one thread updates one grid cell.
+\end{itemize}
+
+Simulation arrays remain on the GPU during stepping to minimize transfer overhead. Double buffering is used for velocity, pressure, and dye updates.
+
+\subsection{Visualization and Interaction}
+For rendering, the GPU simulation output is displayed in real time through OpenGL. Dye is used as the primary visual channel because pressure/divergence fields are less intuitive.
+
+Interactive control includes:
+\begin{itemize}
+    \item mouse drag to inject local force and dye;
+    \item multiple view modes (velocity, pressure, divergence, dye);
+    \item static wall obstacle to demonstrate boundary interaction.
+\end{itemize}
+
+\subsection{Boundary and Obstacle Handling}
+Domain boundaries use no-flow style velocity constraints and pressure copy behavior at edges. A wall obstacle mask is included in the simulation to block flow in solid cells and highlight fluid-structure interaction through a center-gap channel.
+
+\subsection{Tools}
+\begin{itemize}
+    \item \textbf{CUDA}: GPU fluid simulation kernels and timing via CUDA events.
+    \item \textbf{OpenGL + GLFW}: real-time rendering and mouse interaction.
+    \item \textbf{C++17 + CMake}: code organization and build automation.
+    \item \textbf{LaTeX}: proposal and final report writing.
+\end{itemize}
+
+\section{Expected Results / What We Will Learn}
+\textbf{Expected results}:
+\begin{itemize}
+    \item real-time 2D smoke/dye simulation with interactive mouse force input;
+    \item validated CPU--GPU consistency under shared initialization and parameters;
+    \item performance tables across grid sizes and Jacobi iteration counts;
+    \item visible wall-boundary interaction in the final demo.
+\end{itemize}
+
+\textbf{What we will learn}:
+\begin{itemize}
+    \item how Navier--Stokes projection can be mapped to parallel GPU kernels;
+    \item how numerical choices (grid size, iteration count) affect quality and runtime;
+    \item how to design a correctness-first evaluation workflow for graphics simulation.
+\end{itemize}
+
+\section{Evaluation Plan}
+\subsection{Correctness Verification}
+CPU and GPU will be initialized with identical state and parameters, then compared after $N$ steps using:
+\[
+\text{max abs error}, \quad \text{mean abs error}, \quad
+\text{relative } L_2 = \frac{\|x_{\text{cpu}} - x_{\text{gpu}}\|_2}{\|x_{\text{cpu}}\|_2}.
+\]
+Fields to compare: velocity $u,v$, pressure, divergence (and optionally dye).
+
+\subsection{Performance Benchmark}
+We will measure:
+\begin{itemize}
+    \item CPU time per step (std::chrono),
+    \item GPU kernel-only time per step (CUDA events),
+    \item GPU end-to-end time including memory transfers.
+\end{itemize}
+
+Benchmark configurations:
+\begin{itemize}
+    \item grid sizes: $128^2, 256^2, 512^2, 1024^2$;
+    \item Jacobi iterations: 20, 40, 80.
+\end{itemize}
+
+Reported metric: speedup $= \frac{t_{\text{cpu}}}{t_{\text{gpu}}}$ with clear distinction between kernel-only and end-to-end timing.
+
+\section{Project Timeline}
+\begin{itemize}
+    \item \textbf{M1}: CPU core pipeline stable on small grids.
+    \item \textbf{M2}: CUDA kernels complete and runnable.
+    \item \textbf{M3}: CPU--GPU correctness validated.
+    \item \textbf{M4}: Performance sweeps and analysis complete.
+    \item \textbf{M5}: Interactive visualization polishing.
+\end{itemize}
+
+\section{Tasks of Each Member}
+\begin{itemize}
+    \item \textbf{林哲安}: fluid model and solver, OpenGL texture/shader implementation.
+    \item \textbf{許書瑋}: interaction, visualization, testing, and presentation/report integration.
+\end{itemize}
+
+\begin{thebibliography}{9}
+\bibitem{gpugems38}
+Mark J. Harris. \textit{Fast Fluid Dynamics Simulation on the GPU}. In GPU Gems, Chapter 38. NVIDIA.
+
+\bibitem{stam}
+Jos Stam. \textit{Stable Fluids}. Proceedings of SIGGRAPH, 1999.
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,154 @@
+Skeleton Animation & 
+Interpolation
+HW2 
+2026 Computer Animation and Special Effects
+
+Outline
+● Overview 
+● Objective 
+● Questions
+● Bonus
+● Report 
+● Grading 
+● Submission 
+● Note
+
+Overview - Forward Kinematics
+● Pose example
+● Each bone has
+○ local coordinate
+○ start position
+○ end position
+
+Overview
+● Quaternion
+○ good for compounding rotations
+○ Avoid gimbal lock
+○ https://eater.net/quaternions
+source: https://eater.net/quaternions/video/intro
+
+Overview
+● Slerp (Spherical Linear Interpolation)
+slerp(q₁, q₂, u) = (sin(1 − u)Ω / sin Ω) q₁ + (sin uΩ / sin Ω) q₂
+
+Overview
+● Squad (Spherical Quadrangle Interpolation)
+○ Bezier Interpolation of Quaternions
+○ provide Higher-Order Continuity than Slerp
+Squad(p, a, b, q; α) = Slerp(Slerp(p, q; α), slerp(a, b; α); 2(1 − α)α)
+source: https://splines.readthedocs.io/en/latest/rotation/squad.html
+
+Objective
+● Everything you need to implement is in
+○ src/util/interpolation_math.cpp
+○ QuaternionInterpolation/main.cpp
+○ src/simulation/kinematics.cpp
+○ src/acclaim/motion.cpp
+● There are two main features in this HW - skeleton animation and Interpolation
+○ Finish Part 1 and Part 2, and you'll be all set to run the animation.
+○ The other parts are about keyframe interpolation 
+
+Part 1 - Change Euler to Quaterniond
+● Goal
+○ in motion.cpp bool Motion::readAMCFile(...)
+○ saved in current_posture.bone_rotations
+● Hint
+○ You can look at util/helper.cpp to get some idea
+○ Watch out the order of these three axis(X Y Z)
+
+Part 2 - Forward Kinematics(FK): 
+forwardSolver(...)
+● Goal
+○ in kinematics.cpp
+○ Implement forward kinematics
+● Convert motion data from joint space to the Cartesian space
+○ set each bone’s global start and end position and rotation
+○ Hint
+■ review “kinematics.pptx” from p.1 - p.19
+■ read “acclaim_FK_IKnote.pdf” from p.1 - p.4
+■ read local coordinate data from FrameQuat& frame first
+■ you can probably use DFS or BFS to traverse all bones
+■ you can check
+● struct Bone in bone.h
+● struct FrameQuat in kinematics.h
+● fkAnimation->forwardkinematics(...) in main.cpp
+
+Part 3 - Hemisphere-normalised
+● Goal
+○ in main.cpp void buildKeyframeData(...)
+○ Key frame preprocess
+○ Make sure the bones’ rotation(Quaterniond) are hemisphere-normalised
+● Hint
+○ You can use .dot() to check
+
+Part 4 - RootPositionInterpolation(...)
+● Goal
+○ in interpolation_math.cpp
+○ Interpolate the Root of the skeleton in world position
+○ You can choose method like Cubic Bezier or others
+○ You can check on kinematics::FrameQuat interpolateFrame() in main.cpp
+■ Your method will be used as kd.posInterp() in interpolateFrame()
+
+InterpolationMath::slerp()
+● Hint
+○ Strongly suggest you do Slerp first
+○ You can review "3Drotation.pptx" p. 40
+InterpolationMath::squadQuat()
+● Hint
+○ https://splines.readthedocs.io/en/latest/rotation/squad.html
+Part 5 - Quaternion Interpolation
+
+Demo Video
+
+Question
+● Answer these question in your report 
+○ Introduce your implementation in RootPositionInterpolation()
+○ Your observation and comparison between Slerp and Squad
+○ The reason why we need to make keyframes’ rotation 
+hemisphere-normalised
+
+Bonus
+● You can add any creative things or other experimental observation
+○ Ex. Change the interpolation method from Quaternions to Euler angles.
+● Remember to write it down in your report and submit the code you write.
+
+Report
+● Suggested outline
+○ Introduction/Motivation 
+○ Fundamentals Implementation 
+○ Questions and Discussion
+■ Answer the Questions
+■ Discuss your finding (the keyframe interval, interpolation math…)
+■ Bonus 
+○ Conclusion
+
+Grading
+● Coding - 90 %
+○ Part 1 - Euler to Quaterniond - 5 %
+○ Part 2 - Forward Kinematics - 30 %
+○ Part 3 - Hemisphere-normalised - 5 %
+○ Part 4 - Root position interpolation - 20 %
+○ Part 5 - Quaternion Interpolation - 30 %
+■ Slerp - 10 %
+■ Squad - 20 %
+● Report - 20 %
+● Bonus - 10 %
+
+Submission
+● Please upload these files respectively
+○ interpolation_math.cpp
+○ main.cpp
+○ kinematics.cpp
+○ motion.cpp
+○ report_< your student ID>.pdf
+● Late policies
+○ Penalty of 10 points on each day after deadline
+● Deadline
+○ Friday, 2026/04/24, 23:59
+
+Note
+● Read TODOs in the template to get some idea
+● Read README.md to know how to build this project
+● How to contact TAs?
+○ please ask your questions on new E3 forum or send email to ALL TAs via new E3
+○ if you need to ask questions face-to-face, please send an email for appointment

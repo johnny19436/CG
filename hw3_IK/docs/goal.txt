@@ -1,0 +1,73 @@
+        HW3
+Inverse Kinematics
+     Jacobian & CCD
+Jacobian IK
+• JacobianChainSolver()
+• pseudoInverseLinearSolver()
+
+Review "kinematics.pptx" from p.20 - p.50
+Review "acclaim_FK_IKnote.pdf" Inverse Kinematics part
+
+
+Don’t Forget DOFs and rotation constraints.
+Notabilia
+Notabilia
+• Joint & Bone Chains
+CCD IK: Overview
+                   -Traverse Bone Chain
+
+                   -Rotate Bone
+
+                   -Update effector pos
+CCD IK: Overview
+Calculate rotation.
+
+
+
+Convert world rotation to local.
+
+
+
+Apply DOF & rotation constraints.
+CCD IK: Overview
+Updating effector position
+    Use the ACTUAL applied rotation.
+    (rotation was clamped)
+
+    Convert rotation back to world space.
+
+    Rotate vector to end effector.
+Report
+Question.          5%
+  Describe local and global coordinates in your words.
+Implementation.    10%
+Discussion.        5%
+  Different Step size.
+  If you noticed any difference between Jacobian and CCD.
+Bonus. -
+  Optional, anything relevant to the topic.
+Miscellaneous. -
+  Any changes outside of kinematics.cpp.
+  Other things you’d like to add.
+Scoring
+IKConverged()                 5%
+clampBoneRotation()           5%
+pseudoInverseLinearSolver()   10%
+JacobianChainSolver()         20%
+CCDChainSolver()              20%
+Jacobian Visual Correctness   10%
+CCD Visual Correctness        10%
+Report                        20%
+Bonus                         up to 10%
+Submission
+HW3_<student_id>.zip
+    kinematics.cpp
+    report.pdf
+    (any other modified files)
+
+Deadline: 5/18 23:59
+
+10% penalty / day after deadline.
+
+If you have any questions please email all 3 TAs.
+

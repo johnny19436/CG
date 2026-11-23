@@ -1,0 +1,109 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{setspace}
+
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+\onehalfspacing
+
+\title{Computer Animation HW3 Report\\Inverse Kinematics (Jacobian and CCD)}
+\author{Student ID: 112550052}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Question: Local and Global Coordinates (5\%)}
+
+\textbf{Global (world) coordinates} describe geometry in a single fixed frame shared by the whole scene.
+In this assignment, each bone stores world-space quantities after forward kinematics, for example
+\texttt{start\_position}, \texttt{end\_position}, and the accumulated orientation \texttt{rotation}.
+Targets for IK are also given in this same world frame.
+
+\textbf{Local coordinates} describe vectors and rotations relative to a moving frame attached to a bone
+(or to the joint frame defined by the ASF hierarchy and the \texttt{rot\_parent\_current} offset).
+The AMC posture stores per-bone Euler angles (\texttt{Posture::bone\_rotations}) that act as joint variables
+in the bone's local rotation convention (ZYX composition via \texttt{util::rotateDegreeZYX} in the provided FK).
+The bone direction \texttt{dir} is expressed in the bone's local frame before it is transformed by the
+current world rotation when computing the bone endpoint.
+
+\textbf{Relationship.}
+Forward kinematics maps local joint parameters to global poses by walking the hierarchy and concatenating
+transforms. Inverse kinematics typically computes a desired correction in world space (for example aligning
+the vector from a joint to the effector toward the target), then maps that correction back into changes to
+local Euler parameters, applies joint limits, and runs FK again so the next iteration sees consistent globals.
+
+\section{Implementation (10\%)}
+
+\subsection{\texttt{IKConverged}}
+For each IK chain index $i$, the end effector position is read through \texttt{jointChains[$i$][0]} (a pointer
+into the live bone world position). Convergence holds when every chain satisfies
+$\lVert \mathbf{p}_{\mathrm{ee},i}-\mathbf{t}_i\rVert < \varepsilon$ with $\varepsilon = 10^{-3}$.
+
+\subsection{\texttt{clampBoneRotation}}
+Rotation limits from the ASF file (\texttt{rxmin/rxmax}, etc.) are applied only to enabled degrees of freedom
+(\texttt{dofrx}, \texttt{dofry}, \texttt{dofrz}). Disabled axes are left unchanged.
+
+\subsection{\texttt{pseudoInverseLinearSolver}}
+The Jacobian linearization is solved with a damped thin SVD pseudoinverse, minimizing
+$\lVert J\Delta\boldsymbol{\theta}-\mathbf{e}\rVert$ while down-weighting near-singular directions.
+The damping factor is tunable at runtime (bonus; default $10^{-6}$).
+
+\subsection{\texttt{JacobianChainSolver}}
+Each iteration runs FK, forms the geometric Jacobian for positional rows using instantaneous world axes for
+the ZYX Euler parameterization (matching the course slides), scales the position error by the (runtime-tunable)
+Jacobian step, solves for $\Delta\boldsymbol{\theta}$, converts radians to degrees, applies updates, clamps,
+applies the root translation fix for chain index $0$, and runs FK again.
+
+\subsection{\texttt{CCDChainSolver}}
+Each outer iteration begins with FK and an early exit if the effector is close to the target.
+CCD sweeps joints from the end of the chain toward the base. At each joint pivot, normalized vectors to the
+effector and to the target define a shortest quaternion rotation in world space; its angle is scaled by the
+(runtime-tunable) CCD step. The corresponding spatial angular increment is mapped to local Euler rates using the
+same instantaneous axis columns as the Jacobian orientation part, via a small damped least-squares solve
+(damping tunable at runtime for the bonus), then updates are clamped and FK refreshes the effector pointer
+\texttt{jointChains[0][0]} for the next joint.
+
+\subsection{\texttt{inverseIKSolver}}
+FK is run once before iterating chains so shared postures begin from a consistent world state. Each chain
+solver updates the same posture; if the convergence test fails, the posture is restored from a copy and FK is
+run again.
+
+\section{Discussion (5\%)}
+
+\subsection{Step size}
+Jacobian and CCD step sizes trade stability against speed.
+Smaller values reduce overshoot and oscillation near targets and near joint limits, but require more iterations.
+Larger values can track moving targets faster but may violate limits more aggressively before clamping, and
+can diverge when the linearization or single-joint alignment is inaccurate.
+The bonus UI exposes these as sliders so the trade-off can be explored interactively.
+
+\subsection{Jacobian versus CCD}
+The Jacobian method updates all joints in the chain together using a global linearization of the end effector
+motion, which tends to behave smoothly for small residuals and is closer to the classical inverse-Jacobian
+pipeline from lecture, but it can be sensitive to singularities and coupling between Euler axes.
+Increasing SVD damping in the Jacobian solve often smooths motion near singular configurations at the cost of
+slower convergence.
+CCD applies localized joint-by-joint corrections and is often robust and easy to implement, but the sweep
+ordering matters and convergence can be slower or exhibit characteristic ``CCD'' motion under large errors.
+
+\section{Bonus (optional)}
+
+I added \textbf{runtime IK parameter tuning} in the Control panel under \textbf{``Bonus: IK tuning''}:
+\begin{itemize}
+    \item \textbf{Jacobian step} and \textbf{CCD step} scale how aggressively each solver moves per iteration.
+    \item \textbf{Jacobian SVD damping} softens the Moore--Penrose solve for $J\Delta\theta \approx e$ near singularities.
+    \item \textbf{CCD axis-fit damping} regularizes the $3\times k$ least-squares mapping from world angular increment
+          to Euler rates at each CCD joint.
+    \item \textbf{Reset IK parameters} restores course defaults ($0.3$, $0.3$, $10^{-6}$, $10^{-4}$).
+\end{itemize}
+API: \texttt{kinematics.h} declares getters, setters, and \texttt{resetIKParametersToDefault()}; defaults live in
+\texttt{kinematics.cpp} (\texttt{internal} namespace). The ImGui controls are in \texttt{InverseKinematics/main.cpp}.
+
+\section{Miscellaneous}
+Modified files for the bonus: \texttt{include/simulation/kinematics.h}, \texttt{src/simulation/kinematics.cpp},
+\texttt{InverseKinematics/main.cpp}. Core IK remains in \texttt{kinematics.cpp}.
+
+\end{document}
